@@ -1,0 +1,3 @@
+./simplecar -f -1
+./simplecar -f -2
+./simplecar -f -5
