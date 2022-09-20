@@ -37,6 +37,7 @@ Checker *ch = NULL;
 
 void  signal_handler (int sig_num)
 {
+    cout<<endl;
     if (ch != NULL) {
         cout << "Last Frame " << endl;
 		
@@ -199,6 +200,7 @@ void check_aiger (int argc, char** argv)
   std::string stderr_filename = output_dir + filename + ".err";
   std::string res_file_name = output_dir + filename + ".res";
   
+  std::string data_filename = output_dir + filename + ".dat";
   std::string dot_file_name = output_dir + filename + ".gv";
   
   if (!verbose)
@@ -206,6 +208,9 @@ void check_aiger (int argc, char** argv)
   //freopen (stderr_filename.c_str (), "w", stderr);
   ofstream res_file;
   res_file.open (res_file_name.c_str ());
+  // ofstream data_file;
+  // data_file.open(data_filename.c_str (),ios::app);
+  // data_file<<"try data";
   
   //write the Bad states to dot file
   if (gv)

@@ -23,6 +23,7 @@
 #include "checker.h"
 #include <vector>
 #include <iostream>
+#include <fstream>
 #include "utility.h"
 #include "statistics.h"
 pthread_t bmc;
@@ -69,7 +70,7 @@ namespace car
 	        
 			bool bmc_res = false;
 			bmc_res = bmc_check();
-			
+			cerr<<std::endl;
 			bool res;
 			if(bmc_res) res = true;
 			else
@@ -100,11 +101,17 @@ namespace car
 		int unroll = 1;
 		double all_bmc_time = 0.0;
 		double last_bmc_time = 0.0;
+		cout<<"bmc time for each unroll: "<<flush;
 		while (true) {
-			clock_t begin = clock();
+			
 			if(debug_) std::cout<<"bmc unroll: "<<unroll<<endl;
 			unroll_solver_->unroll_one_more(unroll);
+			clock_t begin = clock();
 			bool res = bmc_sat(unroll);
+			clock_t end = clock();
+			last_bmc_time = double (end - begin) / CLOCKS_PER_SEC;
+			cout<<last_bmc_time<<","<<flush;
+			//(*data_)<< last_bmc_time << " ";
 			if(res){
 				//get counterexample
 				std::vector<State*> states = bmc_get_all_states(unroll);
@@ -114,8 +121,6 @@ namespace car
 				bmc_update_F_sequence(unroll);
 			}
 			if(bmc_max_time_ < 60){
-				clock_t end = clock();
-				last_bmc_time = double (end - begin) / CLOCKS_PER_SEC;
 				all_bmc_time += last_bmc_time;
 				//predict the next bmctime is equal to the last bmctiime, if all + next surpass the max,end
 				if((all_bmc_time + last_bmc_time)>= double(bmc_max_time_*60)) return false;
@@ -126,6 +131,7 @@ namespace car
 	}
 
 	bool Checker::car_check (){
+		
 		if (verbose_)
 			cout << "start check ..." << endl;
 		if (immediate_satisfiable ()){  //0 step

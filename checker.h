@@ -147,6 +147,7 @@ namespace car
 		Statistics *stats_;
 		
 		std::ofstream* dot_; //for dot file
+		std::ofstream data_; //for bmc time data file
 		int solver_call_counter_; //counter for solver_ calls
 		int start_solver_call_counter_; //counter for start_solver_ calls
 		
