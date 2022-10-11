@@ -125,6 +125,7 @@ namespace car{
 	    //contraints, outputs and latches gates are stored in order, 
 	    //as the need for start solver construction
 	    hash_set<unsigned> exist_gates;
+		hash_set<unsigned> coi_exist_gates;
 		vector<unsigned> gates;
 		gates.resize (max_id_+1, 0);
 		//create clauses for constraints
@@ -137,7 +138,7 @@ namespace car{
 			assert (aa != NULL);
 			add_clauses_from_gate (aa);
 		}
-		
+		for(auto it = cls_.begin();it != cls_.end();++it) coi_cls_.emplace_back(*it); //copy cls_ to coi_cls_
 		
 		set_outputs_start ();
 		
@@ -154,7 +155,20 @@ namespace car{
 			add_prime_clauses_from_gate (aa);
 			//bmc_add_prime_clauses_from_gate (aa);  //add bmc needed clause
 		}
-		
+
+		//create coi clauses for output
+		gates.resize (max_id_+1, 0);
+		collect_necessary_gates_for_coi (aig, aig->outputs, aig->num_outputs, coi_exist_gates, gates);
+		for (vector<unsigned>::iterator it = gates.begin (); it != gates.end (); it ++)
+		{
+		    if (*it == 0) continue;
+			aiger_and* aa = aiger_is_and (const_cast<aiger*>(aig), *it);
+			assert (aa != NULL);
+			//add_clauses_from_gate (aa);
+			add_prime_clauses_from_gate_for_coi (aa);
+			//bmc_add_prime_clauses_from_gate (aa);  //add bmc needed clause
+		}
+
 		set_latches_start ();
 		
 		//create clauses for latches
@@ -173,19 +187,22 @@ namespace car{
 			//add clauses for prime (it->first) <-> it->second
 			cls_.push_back (clause (prime (-(it->first)), it->second));
 			cls_.push_back (clause (prime (it->first), -(it->second)));
-			// bmc_cls_.push_back (clause (prime (-(it->first)), it->second));
-			// bmc_cls_.push_back (clause (prime (it->first), -(it->second)));
+			coi_cls_.push_back (clause (prime (-(it->first)), it->second));
+			coi_cls_.push_back (clause (prime (it->first), -(it->second)));
 		}
 		
 		//create clauses for true
 		cls_.push_back (clause (true_));
 		cls_.push_back (clause (prime (true_)));
 
-		// bmc_cls_.push_back (clause (true_));
-		// bmc_cls_.push_back (clause (prime (true_)));
+		coi_cls_.push_back (clause (true_));
+		coi_cls_.push_back (clause (prime (true_)));
 		
 		for(int i=0;i<constraints_.size();i++)
 			cls_.push_back(clause(constraints_[i]));
+
+		for(int i=0;i<constraints_.size();i++)
+			coi_cls_.push_back(clause(constraints_[i]));
 	}
 	
 	
@@ -213,11 +230,35 @@ namespace car{
 		
 	}
 	
+	void Model::collect_necessary_gates_for_coi (const aiger* aig, const aiger_symbol* as, const int as_size, 
+	                                        hash_set<unsigned>& exist_gates, vector<unsigned>& gates)
+	{
+		//exist_gates here stand for andgates and latches
+		for (int i = 0; i < as_size; i ++)
+		{
+		//in case the output is true or false
+		if (is_true (as[i].lit))
+			outputs_[i] = true_;
+		else if (is_false (as[i].lit))
+			outputs_[i] = false_;
+		
+		recursively_add_for_coi (as[i].lit, aig, exist_gates, gates);	
+		}
+		
+	}
 	
 	aiger_and* Model::necessary_gate (const unsigned id, const aiger* aig)
 	{
 		if (!is_true (id) && !is_false (id))
 			return aiger_is_and (const_cast<aiger*> (aig), (id % 2 == 0) ? id : (id-1));
+			
+		return NULL;
+	}
+
+	aiger_symbol* Model::necessary_latch (const unsigned id, const aiger* aig)
+	{
+		if (!is_true (id) && !is_false (id))
+			return aiger_is_latch (const_cast<aiger*> (aig), (id % 2 == 0) ? id : (id-1));
 			
 		return NULL;
 	}
@@ -236,6 +277,44 @@ namespace car{
 		
 		aiger_and* aa1 = necessary_gate (aa->rhs1, aig);
 		recursively_add (aa1, aig, exist_gates, gates);
+	}
+
+	void Model::recursively_add_for_coi (const unsigned id, const aiger* aig, hash_set<unsigned>& exist_gates, vector<unsigned>& gates)
+	{
+		//gates here stand for andgates and latches, the same for exist_gates
+		if (is_true (id) || is_false (id)) return;
+		unsigned true_id = id/2;
+		unsigned positive_id = (id % 2 == 0) ? id : (id-1);
+		// if id is input -> return 
+		if (true_id <= num_inputs_) return;
+
+		if (exist_gates.find (positive_id) != exist_gates.end ())
+			return;
+		// if id is latch  -> recursivly add aa's next 
+		if (true_id <= (num_inputs_ + num_latches_))
+		{
+			aiger_symbol *lat;
+			lat = necessary_latch(id,aig);
+			assert(lat != NULL);
+			exist_gates.insert (positive_id);
+			recursively_add_for_coi (lat->next, aig, exist_gates, gates);
+		}
+		else
+		{
+			// if id is andgate -> recursivly add id's rhs0 and rhs1
+			aiger_and* aa;
+			aa = necessary_gate (id, aig);
+			assert(aa != NULL);
+			gates[aa->lhs/2] = aa->lhs;
+			exist_gates.insert (aa->lhs);
+			unsigned aa0 = aa->rhs0;
+			recursively_add_for_coi (aa0, aig, exist_gates, gates);
+			
+			unsigned aa1 = aa->rhs1;
+			recursively_add_for_coi (aa1, aig, exist_gates, gates);
+		}
+	
+		
 	}
 	
 	void Model::add_clauses_from_gate (const aiger_and* aa)
@@ -294,37 +373,69 @@ namespace car{
 		}
 	}
 
-	void Model::bmc_add_prime_clauses_from_gate (const aiger_and* aa){
+	void Model::add_prime_clauses_from_gate_for_coi (const aiger_and* aa){
 		assert (aa != NULL);
 		assert (!is_true (aa->lhs) && !is_false (aa->lhs));
 		
 		if (is_true (aa->rhs0))
 		{
-			bmc_cls_.push_back (clause (car_var (aa->lhs), -car_var (aa->rhs1)));
-			bmc_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs1)));
+			coi_cls_.push_back (clause (car_var (aa->lhs), -car_var (aa->rhs1)));
+			coi_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs1)));
 			//add the prime for aa->lhs
-			bmc_cls_.push_back (clause (prime (car_var (aa->lhs)), prime (-car_var (aa->rhs1))));
-			bmc_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs1))));
+			coi_cls_.push_back (clause (prime (car_var (aa->lhs)), prime (-car_var (aa->rhs1))));
+			coi_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs1))));
 		}
 		else if (is_true (aa->rhs1))
 		{
-			bmc_cls_.push_back (clause (car_var (aa->lhs), -car_var (aa->rhs0)));
-			bmc_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs0)));
+			coi_cls_.push_back (clause (car_var (aa->lhs), -car_var (aa->rhs0)));
+			coi_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs0)));
 			//add the prime for aa->lhs
-			bmc_cls_.push_back (clause (prime (car_var (aa->lhs)), prime (-car_var (aa->rhs0))));
-			bmc_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs0))));
+			coi_cls_.push_back (clause (prime (car_var (aa->lhs)), prime (-car_var (aa->rhs0))));
+			coi_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs0))));
 		}
 		else
 		{
-			bmc_cls_.push_back (clause (car_var (aa->lhs), -car_var (aa->rhs0), -car_var (aa->rhs1)));
-			bmc_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs0)));
-			bmc_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs1)));
+			coi_cls_.push_back (clause (car_var (aa->lhs), -car_var (aa->rhs0), -car_var (aa->rhs1)));
+			coi_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs0)));
+			coi_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs1)));
 			//add the prime for aa->lhs
-			bmc_cls_.push_back (clause (prime (car_var (aa->lhs)), prime (-car_var (aa->rhs0)), prime (-car_var (aa->rhs1))));
-			bmc_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs0))));
-			bmc_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs1))));
+			coi_cls_.push_back (clause (prime (car_var (aa->lhs)), prime (-car_var (aa->rhs0)), prime (-car_var (aa->rhs1))));
+			coi_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs0))));
+			coi_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs1))));
 		}
 	}
+
+	// void Model::bmc_add_prime_clauses_from_gate (const aiger_and* aa){
+	// 	assert (aa != NULL);
+	// 	assert (!is_true (aa->lhs) && !is_false (aa->lhs));
+		
+	// 	if (is_true (aa->rhs0))
+	// 	{
+	// 		bmc_cls_.push_back (clause (car_var (aa->lhs), -car_var (aa->rhs1)));
+	// 		bmc_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs1)));
+	// 		//add the prime for aa->lhs
+	// 		bmc_cls_.push_back (clause (prime (car_var (aa->lhs)), prime (-car_var (aa->rhs1))));
+	// 		bmc_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs1))));
+	// 	}
+	// 	else if (is_true (aa->rhs1))
+	// 	{
+	// 		bmc_cls_.push_back (clause (car_var (aa->lhs), -car_var (aa->rhs0)));
+	// 		bmc_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs0)));
+	// 		//add the prime for aa->lhs
+	// 		bmc_cls_.push_back (clause (prime (car_var (aa->lhs)), prime (-car_var (aa->rhs0))));
+	// 		bmc_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs0))));
+	// 	}
+	// 	else
+	// 	{
+	// 		bmc_cls_.push_back (clause (car_var (aa->lhs), -car_var (aa->rhs0), -car_var (aa->rhs1)));
+	// 		bmc_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs0)));
+	// 		bmc_cls_.push_back (clause (-car_var (aa->lhs), car_var (aa->rhs1)));
+	// 		//add the prime for aa->lhs
+	// 		bmc_cls_.push_back (clause (prime (car_var (aa->lhs)), prime (-car_var (aa->rhs0)), prime (-car_var (aa->rhs1))));
+	// 		bmc_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs0))));
+	// 		bmc_cls_.push_back (clause (prime (-car_var (aa->lhs)), prime (car_var (aa->rhs1))));
+	// 	}
+	// }
 
 	void Model::set_init (const aiger* aig)
 	{

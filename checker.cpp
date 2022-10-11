@@ -70,7 +70,7 @@ namespace car
 	        
 			bool bmc_res = false;
 			bmc_res = bmc_check();
-			cerr<<std::endl;
+			cout<<std::endl;
 			bool res;
 			if(bmc_res) res = true;
 			else

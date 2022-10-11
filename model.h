@@ -99,7 +99,8 @@ private:
 	                //(1) clauses for constraints, i.e. those before position outputs_start_;
 	                //(2) clauses for outputs, i.e. those before position latches_start_;
 	                //(3) clauses for latches, i.e. all 
-	Clauses bmc_cls_;  //clauses for outputs
+	Clauses coi_cls_; // compute the coi of output (and constraints)
+	//Clauses bmc_cls_;  //useless now
 	//std::vector<Clauses> prime_cls_;   //store the primed cls of unrolling transition
 	
 	int outputs_start_; //the index of cls_ to point the start position of outputs
@@ -169,11 +170,15 @@ private:
 	void create_next_map (const aiger* aig);
 	void create_clauses (const aiger* aig);
 	void collect_necessary_gates (const aiger* aig, const aiger_symbol* as, const int as_size, hash_set<unsigned>& exist_gates, std::vector<unsigned>& gates, bool next = false);
+	void collect_necessary_gates_for_coi (const aiger* aig, const aiger_symbol* as, const int as_size,hash_set<unsigned>& exist_gates, vector<unsigned>& gates);
 	aiger_and* necessary_gate (const unsigned id, const aiger* aig);
+	aiger_symbol* necessary_latch (const unsigned id, const aiger* aig);
 	void recursively_add (const aiger_and* aa, const aiger* aig, hash_set<unsigned>& exist_gates, std::vector<unsigned>& gates);
+	void recursively_add_for_coi (const unsigned id, const aiger* aig, hash_set<unsigned>& exist_gates, vector<unsigned>& gates);
 	void add_clauses_from_gate (const aiger_and* aa);
+	void add_prime_clauses_from_gate_for_coi (const aiger_and* aa);
 	void add_prime_clauses_from_gate (const aiger_and* aa);
-	void bmc_add_prime_clauses_from_gate (const aiger_and* aa);
+	//void bmc_add_prime_clauses_from_gate (const aiger_and* aa);
 	void set_init (const aiger* aig);
 	void set_constraints (const aiger* aig);
 	void set_outputs (const aiger* aig);
