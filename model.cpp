@@ -486,7 +486,7 @@ namespace car{
 	
 	//prime of cls_[id]
 	std::vector<int> Model::clause_prime(const int id,int level){
-		std::vector<int> res = cls_[id];
+		std::vector<int> res = coi_cls_[id];
 		for(int i = 0;i<res.size();i++)
 			res[i] = prime(res[i],level-1);
 		return res;

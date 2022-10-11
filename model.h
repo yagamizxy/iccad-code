@@ -54,8 +54,10 @@ public:
 	inline int outputs_start () {return outputs_start_;}
 	inline int latches_start () {return latches_start_;}
 	inline int size () {return cls_.size ();}
+	inline int coi_size () {return coi_cls_.size ();}
 	//inline int bmc_size () {return bmc_cls_.size ();}   //bmc clause
 	inline std::vector<int>& element (const int id) {return cls_[id];}
+	inline std::vector<int>& coi_element (const int id) {return coi_cls_[id];}
 	//inline std::vector<int>& bmc_element (const int id) {return bmc_cls_[id];}
 	inline int output (const int id) {return outputs_[id];}
 	//inline std::vector<int>& get_prime_cls (const int id,const int num) {return prime_cls_[id][num];}
@@ -170,11 +172,11 @@ private:
 	void create_next_map (const aiger* aig);
 	void create_clauses (const aiger* aig);
 	void collect_necessary_gates (const aiger* aig, const aiger_symbol* as, const int as_size, hash_set<unsigned>& exist_gates, std::vector<unsigned>& gates, bool next = false);
-	void collect_necessary_gates_for_coi (const aiger* aig, const aiger_symbol* as, const int as_size,hash_set<unsigned>& exist_gates, vector<unsigned>& gates);
+	void collect_necessary_gates_for_coi (const aiger* aig, const aiger_symbol* as, const int as_size,hash_set<unsigned>& exist_gates, std::vector<unsigned>& gates);
 	aiger_and* necessary_gate (const unsigned id, const aiger* aig);
 	aiger_symbol* necessary_latch (const unsigned id, const aiger* aig);
 	void recursively_add (const aiger_and* aa, const aiger* aig, hash_set<unsigned>& exist_gates, std::vector<unsigned>& gates);
-	void recursively_add_for_coi (const unsigned id, const aiger* aig, hash_set<unsigned>& exist_gates, vector<unsigned>& gates);
+	void recursively_add_for_coi (const unsigned id, const aiger* aig, hash_set<unsigned>& exist_gates, std::vector<unsigned>& gates);
 	void add_clauses_from_gate (const aiger_and* aa);
 	void add_prime_clauses_from_gate_for_coi (const aiger_and* aa);
 	void add_prime_clauses_from_gate (const aiger_and* aa);

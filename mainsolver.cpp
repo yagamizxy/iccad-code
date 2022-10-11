@@ -66,14 +66,14 @@ namespace car
 		// dead_flag_ = m->max_id ()*(max_unroll_level_+1) + 2;
 		// max_flag_ = m->max_id()*(max_unroll_level_+1) + 3;
 	    
-		for (int i = 0; i < m->outputs_start (); i ++)
-			add_clause (m->element (i));
+		for (int i = 0; i < m->coi_size (); i ++)
+			add_clause (m->coi_element (i));
 		//outputs
-		for (int i = m->outputs_start (); i < m->latches_start (); i ++)
-			add_clause (m->element (i));
-		//latches
-		for (int i = m->latches_start (); i < m->size (); i ++)
-		    add_clause (m->element (i));
+		// for (int i = m->outputs_start (); i < m->latches_start (); i ++)
+		// 	add_clause (m->element (i));
+		// //latches
+		// for (int i = m->latches_start (); i < m->size (); i ++)
+		//     add_clause (m->element (i));
 		//unroll_to_level(max_unroll_level_);
 	}
 	
@@ -154,7 +154,7 @@ namespace car
 	void MainSolver::unroll_one_more(const int level){
 		if(level == 1) return;
 		
-		for (int i = 0; i < model_->size (); i ++){
+		for (int i = 0; i < model_->coi_size (); i ++){
 			vector<int> tmp = model_->clause_prime(i,level);
 			add_clause (tmp);
 		}
